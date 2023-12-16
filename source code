@@ -1,0 +1,56 @@
+import numpy as np
+from PIL import Image
+
+#string to binary
+def string_to_binary(input_string):
+    binary_result = ''.join(format(ord(char), '08b') for char in input_string)
+    return binary_result
+
+# Input Message
+input_str = input("Enter your text for conversion: ")
+binary_representation = string_to_binary(input_str)
+print(f"Binary representation of '{input_str}':\n{binary_representation}")
+
+
+#Embedding process
+def encode_in_binary(file_name, text):
+    input_image = Image.open(file_name, "r").convert('RGB')
+    image_shape= np.asarray(input_image).shape
+    image_flat= np.asarray(input_image).flatten()
+
+    encoded_text= string_to_binary(text + "<STOP>")
+
+    bit_value= list(zip(encoded_text.ljust(len(image_flat)* 8, '0'), image_flat))
+
+    bit_comp = [
+    (0b11111110 & value) | int(encode_bit) if ix < len(encoded_text) else value
+    for ix, (encode_bit, value) in enumerate(bit_value)
+]
+
+    encoded_img= np.array(bit_comp).reshape(image_shape)
+    return Image.fromarray(np.uint8(encoded_img)).convert('RGB')
+
+# Image path
+image_path = input (r"Enter image path: ") 
+
+# Encode message in image
+try:
+    encoded_image = encode_in_binary(image_path, input_str)
+    
+    # Save the encoded image
+    encoded_image.save("encoded_image.png")
+    
+# Display the encoded image
+    encoded_image.show()
+except Exception as e:
+    print(f"Error: {e}")
+
+
+
+#Extracting process
+def extract_from_image(filename):
+    # Open image
+    encoded_im = np.asarray(Image.open(filename, 'r').convert("RGB"))
+
+    # Extract LSBs
+    extracted_bits = [str(0b00000001 & value) for value in encoded_im.flatten()]
