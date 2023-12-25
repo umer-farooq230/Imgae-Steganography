@@ -1,0 +1,79 @@
+from tkinter import Tk, Label, Button, Entry, Text, filedialog
+import os
+
+class SteganographyUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Steganography Tool")
+        self.root.geometry("600x400")
+
+        self.message_label = Label(root, text="Enter Message:")
+        self.message_label.pack(pady=10)
+
+        self.message_entry = Entry(root, width=50)
+        self.message_entry.pack(pady=10)
+
+        self.browse_button = Button(root, text="Browse Image", command=self.browse_image)
+        self.browse_button.pack(pady=10)
+
+        self.encrypt_button = Button(root, text="Encrypt", command=self.encrypt_message)
+        self.encrypt_button.pack(pady=10)
+
+        self.result_label = Label(root, text="")
+        self.result_label.pack(pady=10)
+
+        self.browse_decrypt_button = Button(root, text="Browse Encrypted Image", command=self.browse_encrypted_image)
+        self.browse_decrypt_button.pack(pady=10)
+
+        self.decrypt_button = Button(root, text="Decrypt", command=self.decrypt_message)
+        self.decrypt_button.pack(pady=10)
+
+        self.result_text = Text(root, height=5, width=50)
+        self.result_text.pack(pady=10)
+
+        self.encrypted_image_path = ""
+
+    def browse_image(self):
+        file_path = filedialog.askopenfilename(title="Select Image", filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
+        if file_path:
+            self.encrypted_image_path = file_path
+            self.result_label.config(text="Selected Image: " + file_path)
+
+    def browse_encrypted_image(self):
+        file_path = filedialog.askopenfilename(title="Select Encrypted Image", filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
+        if file_path:
+            self.encrypted_image_path = file_path
+            self.result_label.config(text="Selected Encrypted Image: " + file_path)
+
+    def encrypt_message(self):
+        message_to_encode = self.message_entry.get()
+        if not message_to_encode:
+            self.result_label.config(text="Please enter a message.")
+            return
+
+        if not self.encrypted_image_path:
+            self.result_label.config(text="Please select an image.")
+            return
+
+        original_path, original_filename = os.path.split(self.encrypted_image_path)
+        encrypted_filename = os.path.splitext(original_filename)[0] + "_encrypted" + os.path.splitext(original_filename)[1]
+        output_image_path = os.path.join(original_path, encrypted_filename)
+
+        encoded_im = encode_in_image(self.encrypted_image_path, message_to_encode)
+        encoded_im.save(output_image_path)
+
+        self.result_label.config(text=f"Data encrypted successfully. Output saved as {encrypted_filename}")
+
+    def decrypt_message(self):
+        if not self.encrypted_image_path:
+            self.result_label.config(text="Please select an encrypted image.")
+            return
+
+        decoded_message = extract_from_image(self.encrypted_image_path)
+        self.result_text.delete(1.0, "end")
+        self.result_text.insert("end", decoded_message)
+
+if __name__ == "__main__":
+    root = Tk()
+    app = SteganographyUI(root)
+    root.mainloop()
