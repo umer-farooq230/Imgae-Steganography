@@ -3,107 +3,147 @@ import numpy as np
 from tkinter import Tk, Label, Button, Entry, Text, filedialog
 import os
 
-def encode_text(text, encoding='utf-8', errors='surrogatepass'):
+def encode_text(text, encoding='utf-8', errors='replace'):
     bits = bin(int.from_bytes(text.encode(encoding, errors), 'big'))[2:]
     return bits.zfill(8 * ((len(bits) + 7) // 8))
 
-def decode_text(bits, encoding='utf-8', errors='surrogatepass'):
+def decode_text(bits, encoding='utf-8', errors='replace'):
     n = int(bits, 2)
-    return n.to_bytes((n.bit_length() + 7) // 8, 'big').decode(encoding, errors) or '\0'
-
+    return n.to_bytes((n.bit_length() + 7) // 8, 'big').decode(encoding, errors)
+ 
 def encode_in_image(filename, text_message):
-    input_im = Image.open(filename, 'r').convert("RGB")
-    image_shape = np.asarray(input_im).shape
-    flat_array = np.asarray(input_im).flatten()
+    try:
+        input_im = Image.open(filename, 'r').convert("RGB")
+        image_shape = np.asarray(input_im).shape
+        flat_array = np.asarray(input_im).flatten()
 
-    encoded_text = encode_text(text_message + "<STOP>")
+        encoded_text = encode_text(text_message + "<STOP>")
+        #list comprehnesion
+        encoded_array = [
+            (0b11111110 & value) | int(encode_bit) if ix < len(encoded_text) else value
+            for ix, (encode_bit, value) in enumerate(zip(encoded_text.ljust(len(flat_array), '0'), flat_array))]
 
-    encoded_array = [
-        (0b11111110 & value) | int(encode_bit) if ix < len(encoded_text) else value
-        for ix, (encode_bit, value) in enumerate(zip(encoded_text.ljust(len(flat_array), '0'), flat_array))]
-
-    encoded_im = np.array(encoded_array).reshape(image_shape)
-    return Image.fromarray(np.uint8(encoded_im)).convert('RGB')
+        encoded_im = np.array(encoded_array).reshape(image_shape)
+        return Image.fromarray(np.uint8(encoded_im)).convert('RGB')
+    except Exception as e:
+        raise ValueError(f"Error encoding message into image: {str(e)}")
 
 def extract_from_image(filename):
-    encoded_im = np.asarray(Image.open(filename, 'r').convert("RGB"))
-    extracted_bits = [str(0b00000001 & value) for value in encoded_im.flatten()]
-    extracted_bits = ''.join(extracted_bits)
-    return decode_text(extracted_bits, errors='replace').split('<STOP>')[0]
+    try:
+        encoded_im = np.asarray(Image.open(filename, 'r').convert("RGB"))
+        extracted_bits = [str(0b00000001 & value) for value in encoded_im.flatten()]
+        extracted_bits = ''.join(extracted_bits)
+        return decode_text(extracted_bits, errors='replace').split('<STOP>')[0]
+    except Exception as e:
+        raise ValueError(f"Error extracting message from image: {str(e)}")
 
-class SteganographyUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Steganography Tool")
-        self.root.geometry("600x400")
-
-        self.message_label = Label(root, text="Enter Message:")
-        self.message_label.pack(pady=10)
-
-        self.message_entry = Entry(root, width=50)
-        self.message_entry.pack(pady=10)
-
-        self.browse_button = Button(root, text="Browse Image", command=self.browse_image)
-        self.browse_button.pack(pady=10)
-
-        self.encrypt_button = Button(root, text="Encrypt", command=self.encrypt_message)
-        self.encrypt_button.pack(pady=10)
-
-        self.result_label = Label(root, text="")
-        self.result_label.pack(pady=10)
-
-        self.browse_decrypt_button = Button(root, text="Browse Encrypted Image", command=self.browse_encrypted_image)
-        self.browse_decrypt_button.pack(pady=10)
-
-        self.decrypt_button = Button(root, text="Decrypt", command=self.decrypt_message)
-        self.decrypt_button.pack(pady=10)
-
-        self.result_text = Text(root, height=5, width=50)
-        self.result_text.pack(pady=10)
-
-        self.encrypted_image_path = ""
-
-    def browse_image(self):
+def browse_image():
+    try:
         file_path = filedialog.askopenfilename(title="Select Image", filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
         if file_path:
-            self.encrypted_image_path = file_path
-            self.result_label.config(text="Selected Image: " + file_path)
+            return file_path
+        return None
+    except Exception as e:
+        raise ValueError(f"Error browsing for image: {str(e)}")
 
-    def browse_encrypted_image(self):
+def browse_encrypted_image():
+    try:
         file_path = filedialog.askopenfilename(title="Select Encrypted Image", filetypes=[("Image files", "*.png;*.jpg;*.jpeg")])
         if file_path:
-            self.encrypted_image_path = file_path
-            self.result_label.config(text="Selected Encrypted Image: " + file_path)
+            return file_path
+        return None
+    except Exception as e:
+        raise ValueError(f"Error browsing for encrypted image: {str(e)}")
 
-    def encrypt_message(self):
-        message_to_encode = self.message_entry.get()
+def encrypt_message(encrypted_image_path, message_entry, result_label):
+    try:
+        message_to_encode = message_entry.get()
         if not message_to_encode:
-            self.result_label.config(text="Please enter a message.")
-            return
+            raise ValueError("Please enter a message.")
 
-        if not self.encrypted_image_path:
-            self.result_label.config(text="Please select an image.")
-            return
+        if not encrypted_image_path:
+            raise ValueError("Please select an image.")
 
-        original_path, original_filename = os.path.split(self.encrypted_image_path)
+        original_path, original_filename = os.path.split(encrypted_image_path)
         encrypted_filename = os.path.splitext(original_filename)[0] + "_encrypted" + os.path.splitext(original_filename)[1]
         output_image_path = os.path.join(original_path, encrypted_filename)
 
-        encoded_im = encode_in_image(self.encrypted_image_path, message_to_encode)
+        encoded_im = encode_in_image(encrypted_image_path, message_to_encode)
         encoded_im.save(output_image_path)
 
-        self.result_label.config(text=f"Data encrypted successfully. Output saved as {encrypted_filename}")
+        result_label.config(text=f"Data encrypted successfully. Output saved as {encrypted_filename}", fg="green")
+    except Exception as e:
+        result_label.config(text=f"Error during encryption: {str(e)}", fg="red")
 
-    def decrypt_message(self):
-        if not self.encrypted_image_path:
-            self.result_label.config(text="Please select an encrypted image.")
-            return
+def decrypt_message(encrypted_image_path, result_text, result_label):
+    try:
+        if not encrypted_image_path:
+            raise ValueError("Please select an encrypted image.")
 
-        decoded_message = extract_from_image(self.encrypted_image_path)
-        self.result_text.delete(1.0, "end")
-        self.result_text.insert("end", decoded_message)
-
+        decoded_message = extract_from_image(encrypted_image_path)
+        result_text.delete(1.0, "end")
+        result_text.insert("end", decoded_message)
+        result_label.config(text="", fg="black")
+    except Exception as e:
+        result_label.config(text=f"Error during decryption: {str(e)}", fg="red")
+#UI start
 if __name__ == "__main__":
-    root = Tk()
-    app = SteganographyUI(root)
-    root.mainloop()
+    win = Tk()
+    win.title("Hacker Steganography Tool")
+    win.geometry("600x400")
+    win.configure(bg="#FFFFFF")  
+
+    encrypted_image_path = ""  
+
+    def update_selected_filename(label, path):
+        filename = os.path.basename(path)
+        label.config(text=f"Selected File: {filename}", fg="black")
+
+    def browse_and_update_path():
+        global encrypted_image_path
+        try:
+            path = browse_image()
+            if path:
+                encrypted_image_path = path
+                update_selected_filename(selected_filename_label, path)
+        except ValueError as e:
+            result_label.config(text=str(e), fg="red")
+
+    def browse_and_update_encrypted_path():
+        global encrypted_image_path
+        try:
+            path = browse_encrypted_image()
+            if path:
+                encrypted_image_path = path
+                update_selected_filename(selected_filename_label, path)
+        except ValueError as e:
+            result_label.config(text=str(e), fg="red")
+
+    message_label = Label(win, text="Enter Message:", bg="#FFFFFF", fg="#3498db")  
+    message_label.pack(pady=10)
+
+    message_entry = Entry(win, width=50, bg="#ecf0f1", fg="#3498db", insertbackground="#3498db") 
+    message_entry.pack(pady=10)
+
+    browse_button = Button(win, text="Browse Image", command=browse_and_update_path, bg="#3498db", fg="#FFFFFF", activebackground="#2980b9")  
+    browse_button.pack(pady=5)
+
+    selected_filename_label = Label(win, text="Selected File: None", fg="black", bg="#FFFFFF")
+    selected_filename_label.pack(pady=4)
+
+    encrypt_button = Button(win, text="Encrypt", command=lambda: encrypt_message(encrypted_image_path, message_entry, result_label), bg="#3498db", fg="#FFFFFF", activebackground="#2980b9") 
+    encrypt_button.pack(pady=5)
+
+    result_label = Label(win, text="", fg="black", bg="#FFFFFF")
+    result_label.pack(pady=5)
+
+    browse_decrypt_button = Button(win, text="Browse Encrypted Image", command=browse_and_update_encrypted_path, bg="#3498db", fg="#FFFFFF", activebackground="#2980b9")  
+    browse_decrypt_button.pack(pady=5)
+
+    result_text = Text(win, height=5, width=50, bg="#ecf0f1", fg="#3498db", insertbackground="#3498db")  
+    result_text.pack(pady=10)
+
+    decrypt_button = Button(win, text="Decrypt", command=lambda: decrypt_message(encrypted_image_path, result_text, result_label), bg="#3498db", fg="#FFFFFF", activebackground="#2980b9", height=2, width=10)  
+    decrypt_button.pack(pady=10)
+
+    win.mainloop()
